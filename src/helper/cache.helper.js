@@ -5,7 +5,17 @@ import NodeCache from "node-cache";
 dotenv.config();
 
 const CACHE_SERVER_URL = process.env.CACHE_URL || null;
-const localCache = new NodeCache({ stdTTL: 3600, checkperiod: 600 }); // Default TTL: 1 hour
+const MAX_CACHE_TTL_SECONDS = 1800;
+const localCache = new NodeCache({ stdTTL: MAX_CACHE_TTL_SECONDS, checkperiod: 300 });
+
+const getEffectiveTtl = (ttl) => {
+  const parsedTtl = Number(ttl);
+  if (!Number.isFinite(parsedTtl) || parsedTtl <= 0) {
+    return MAX_CACHE_TTL_SECONDS;
+  }
+
+  return Math.min(Math.floor(parsedTtl), MAX_CACHE_TTL_SECONDS);
+};
 
 export const getCachedData = async (key) => {
   try {
@@ -26,13 +36,14 @@ export const getCachedData = async (key) => {
 
 export const setCachedData = async (key, value, ttl = 3600) => {
   try {
+    const effectiveTtl = getEffectiveTtl(ttl);
+
     if (CACHE_SERVER_URL) {
-      await axios.post(CACHE_SERVER_URL, { key, value, ttl });
+      await axios.post(CACHE_SERVER_URL, { key, value, ttl: effectiveTtl });
     } else {
-      localCache.set(key, value, ttl);
+      localCache.set(key, value, effectiveTtl);
     }
   } catch (error) {
     console.error("Error setting cache data:", error.message);
   }
 };
-
