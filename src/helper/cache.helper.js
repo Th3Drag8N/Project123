@@ -47,3 +47,4 @@ export const setCachedData = async (key, value, ttl = 3600) => {
     console.error("Error setting cache data:", error.message);
   }
 };
+

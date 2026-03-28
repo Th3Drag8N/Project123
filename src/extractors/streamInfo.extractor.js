@@ -17,7 +17,23 @@ export async function extractServers(id) {
       const server_id = $(element).attr("data-server-id");
       const type = $(element).attr("data-type");
 
-      const serverName = $(element).find("a").text().trim();
+      let serverName = $(element).find("a").text().trim();
+
+      // Backward compatibility mapping
+      switch (serverName.toLowerCase()) {
+        case "megacloud":
+        case "rapidcloud":
+          serverName = "hd-1";
+          break;
+        case "vidsrc":
+        case "vidstreaming":
+          serverName = "hd-2";
+          break;
+        case "t-cloud":
+          serverName = "hd-3";
+          break;
+      }
+
       serverData.push({
         type,
         data_id,
@@ -35,11 +51,15 @@ export async function extractServers(id) {
 async function extractStreamingInfo(id, name, type, fallback) {
   try {
     const servers = await extractServers(id.split("?ep=").pop());
+    
+    // 1. Try exact match
     let requestedServer = servers.filter(
       (server) =>
         server.serverName.toLowerCase() === name.toLowerCase() &&
         server.type.toLowerCase() === type.toLowerCase()
     );
+
+    // 2. Try 'raw' type if 'sub'/'dub' fails but name matches
     if (requestedServer.length === 0) {
       requestedServer = servers.filter(
         (server) =>
@@ -47,16 +67,30 @@ async function extractStreamingInfo(id, name, type, fallback) {
           server.type.toLowerCase() === "raw"
       );
     }
+
+    // 3. Try to find any server of the same type (Fallback for name changes like 'hd-1' -> 'VidSrc')
+    if (requestedServer.length === 0) {
+        requestedServer = servers.filter(
+          (server) => server.type.toLowerCase() === type.toLowerCase()
+        );
+    }
+
+    // 4. If still nothing, take the first available server
+    if (requestedServer.length === 0 && servers.length > 0) {
+        requestedServer = [servers[0]];
+    }
+
     if (requestedServer.length === 0) {
       throw new Error(
         `No matching server found for name: ${name}, type: ${type}`
       );
     }
+
     const streamingLink = await decryptSources_v1(
       id,
       requestedServer[0].data_id,
-      name,
-      type,
+      requestedServer[0].serverName, // Use the actual server name found
+      requestedServer[0].type,       // Use the actual type found
       fallback
     );
     return { streamingLink, servers };
